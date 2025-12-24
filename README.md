@@ -2,8 +2,6 @@
 
 A simple n8n automation that collects news from multiple RSS feeds, cleans and deduplicates them, summarizes the top stories using an AI model, and sends a daily news digest to Telegram.
 
-This project is built as a **learning exercise** to understand how small AI-powered automations work end to end.
-
 ---
 
 ## What This Workflow Does
