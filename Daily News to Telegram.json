@@ -1,0 +1,250 @@
+{
+  "name": "Daily News to Telegram",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * *"
+            }
+          ]
+        }
+      },
+      "id": "9fd14d25-4336-41a8-b8b4-db7e10834199",
+      "name": "Schedule Trigger1",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        224,
+        -528
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://newsdata.io/api/1/news",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "pub_253f22cae966459aa551a0afd15a0532"
+            },
+            {
+              "name": "country",
+              "value": "in"
+            },
+            {
+              "name": "language",
+              "value": "en"
+            },
+            {
+              "name": "size",
+              "value": "5"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ea32d8bf-b63c-47ac-b8ab-9cee7ea0ecc8",
+      "name": "NewsData API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        464,
+        -960
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get all RSS items from all inputs\nconst items = $input.all();\n\n// Normalize RSS articles\nconst normalizedArticles = items.map(item => {\n  const json = item.json;\n\n  return {\n    title: json.title?.trim() || 'No title',\n    description:\n      json.contentSnippet ||\n      json.description ||\n      'No description available',\n    link: json.link || '',\n    source:\n      json.creator ||\n      json['dc:creator'] ||\n      (json.link?.includes('bbc.co.uk') ? 'BBC News' :\n       json.link?.includes('thehindu.com') ? 'The Hindu' :\n       'Unknown source'),\n    pubDate: json.isoDate || json.pubDate || ''\n  };\n});\n\n// Remove duplicates by normalized title\nconst uniqueArticles = [];\nconst seenTitles = new Set();\n\nfor (const article of normalizedArticles) {\n  const key = article.title.toLowerCase();\n  if (!seenTitles.has(key)) {\n    seenTitles.add(key);\n    uniqueArticles.push(article);\n  }\n}\n\n// Sort by newest first (RSS dates are messy, but we try)\nuniqueArticles.sort((a, b) => {\n  return new Date(b.pubDate) - new Date(a.pubDate);\n});\n\n// Limit to top 10\nconst finalArticles = uniqueArticles.slice(0, 10);\n\nreturn [\n  {\n    json: {\n      articles: finalArticles,\n      count: finalArticles.length\n    }\n  }\n];\n"
+      },
+      "id": "7cd0c011-e78e-4d08-b5c4-e03681e521e2",
+      "name": "Merge and Format News",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        -560
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ \"You are a professional news summarizer for an Indian audience. Here are today's top news articles:\\n\\n\" + JSON.stringify($json.articles, null, 2) + \"\\n\\nYour task:\\n1. Analyze all the articles provided\\n2. Summarize them into EXACTLY 5 bullet points\\n3. Each bullet point should be 1-2 sentences maximum\\n4. Cover different topics/categories if possible\\n5. Use simple, clear language that anyone can understand\\n6. Start each point with a relevant emoji\\n\\nFormat strictly as:\\n🔹 Point 1 about topic A\\n🔹 Point 2 about topic B\\n🔹 Point 3 about topic C\\n🔹 Point 4 about topic D\\n🔹 Point 5 about topic E\\n\\nProvide ONLY the 5 bullet points, no introduction or conclusion.\" }}\n",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        864,
+        -560
+      ],
+      "id": "3bfcff33-bac1-46dc-a41b-00d4a85e7b40",
+      "name": "AI Agent1"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        864,
+        -368
+      ],
+      "id": "6dee7ba5-04f6-4782-8783-f1e113cd0bfb",
+      "name": "Google Gemini Chat Model1",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "kcZjxusNZLe1CqCu",
+          "name": "Google Gemini(PaLM) Api account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "1320405480",
+        "text": "={{ \n  \"📰 *Daily News Summary*\\n\" +\n  new Date().toLocaleDateString('en-IN', { \n    weekday: 'long', \n    year: 'numeric', \n    month: 'long', \n    day: 'numeric' \n  }) +\n  \"\\n\\n\" +\n  $json.output +\n  \"\\n\\n_Powered by AI • Sources: BBC News & The Hindu_\" \n}}\n",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "e44b125f-0c96-4793-94c7-a3f57ea1de73",
+      "name": "Send to Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1168,
+        -560
+      ],
+      "webhookId": "36f02dd6-a59d-40a2-b546-be3462acf493",
+      "credentials": {
+        "telegramApi": {
+          "id": "g2Q1DE6rSecMrdfA",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://www.thehindu.com/news/national/feeder/default.rss",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.2,
+      "position": [
+        448,
+        -432
+      ],
+      "id": "48e7e96c-cd04-4e12-a59c-5e484ec26c47",
+      "name": "RSS Read"
+    },
+    {
+      "parameters": {
+        "url": "https://feeds.bbci.co.uk/news/world/rss.xml",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.2,
+      "position": [
+        448,
+        -624
+      ],
+      "id": "ecf3cee4-06fe-4b15-a8b7-0e98db9b471b",
+      "name": "RSS Read1"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger1": {
+      "main": [
+        [
+          {
+            "node": "RSS Read",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "RSS Read1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "NewsData API": {
+      "main": [
+        []
+      ]
+    },
+    "Merge and Format News": {
+      "main": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent1": {
+      "main": [
+        [
+          {
+            "node": "Send to Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RSS Read": {
+      "main": [
+        [
+          {
+            "node": "Merge and Format News",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RSS Read1": {
+      "main": [
+        [
+          {
+            "node": "Merge and Format News",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "c3f85ade-6ca1-4b7c-aa0f-9157a30cd8d8",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "51295f8c9d2c948057d5a4ed47bc72233a6dacf8da84254c3fa0ae93cf4b3423"
+  },
+  "id": "3JCeje5MPNfLdgST",
+  "tags": []
+}
